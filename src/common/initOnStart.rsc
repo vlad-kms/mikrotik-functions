@@ -609,14 +609,17 @@
 :global putItem2localDNS do={
 ##################################
 #   Working with DNS in the local network. DNS must be Bind.
-#   Called from the DHCP server when leasing address
+#   Called from the DHCP server when leasing and unleasing address
 #   DNS server settings in an array input parameter paramsDNS.
 #   If the parameters is not passed, then the global array $homeDNS is used.
-#   Change host ip in DNS. Used by RFC 2136
+#   Change A-record DNS of host and PTR-record DNS of host. Used by RFC 2136
 #    Input:
-#      hostname: - hostname
-#      ip:-------------- ip host
-#      par_ttl: ------ ttl
+#      action: ---- add|del, default add
+#      hostname: -- hostname
+#      ip:--------- ip host
+#      pttl: ------ ttl, default = homeDNS->ttl
+#      pzone: ----- zone, default = homeDNS->zone
+#      pserver: --- server DNS, default = homeDNS->server
 #      isDebug: --- enable log or not
 #   Output: none
 ##################################
@@ -624,29 +627,52 @@
   :global islogFunc;
   :global homeDNS;
 
-  :local ttl [:tonum ($homeDNS->"ttl")]
-  :if ( [:typeof $pttl]!="nothing" && [:len $pttl]!=0) do={ :set ttl [:tonum $pttl]; }
+  # Calculate `isDeb` based on the `isDebug` parameter and the global variable `isLogFunc`.
   :local isDeb [$my2bool value=$isDebug];
   :set $isDeb ([:tobool $isDeb] || [:tobool $islogFunc])
 
+  # Calculate TTL:
+  # if the parameter `pttl` is present, then `ttl` is equal to it;
+  # otherwise, `ttl` is equal to the global variable `homeDNS->ttl`.
+  :local ttl [:tonum ($homeDNS->"ttl")]
+  :if ( [:typeof $pttl]!="nothing" && [:len $pttl]!=0) do={ :set ttl [:tonum $pttl]; }
+  # Calculate zone:
+  # if the parameter `pzone` is present, then `zone` is equal to it;
+  # otherwise, `zone` is equal to the global variable `homeDNS->zone`.
+  :local zone [:tostr ($homeDNS->"zone")]
+  :if ( [:typeof $pzone]!="nothing" && [:len $pzone]!=0) do={ :set zone [:tostr $pzone]; }
+  # if the parameter `pserver` is present, then `server` is equal to it;
+  # otherwise, `server` is equal to the global variable `homeDNS->server`.
+  :local server [:tostr ($homeDNS->"server")]
+  :if ( [:typeof $pserver]!="nothing" && [:len $pserver]!=0) do={ :set server [:tostr $pserver]; }
+  # Calculate operation, add or del records of host. Default is 'add'
+  :local act "add"
+  :if ([:typeof $action] != "nothing" && [:len $action] > 0) do={ :set act $action }
+
   :if ($hostname!="" && $ip!="") do={
+    # if hostname and ip is not empty
     :if ($isDeb) do={
       :log info "Input parameters:"
+      :log info "  - action: $act"
       :log info "  - hostname: $hostname"
       :log info "  - ip: $(ip)"
       :log info "  - isDebug: $isDebug"
-      #:log info ($homeDNS)
-      :log info ($homeDNS->"server")
-      :log info ($homeDNS->"zone")
-      :log info "ttl: $ttl"
+      :log info "  - server: $server"
+      :log info "  - zone: $zone"
+      :log info "  - ttl: $ttl"
     }
-    /tool dns-update name=$hostname zone=[:tostr ($homeDNS->"zone")] key-name=($homeDNS->"keyName") key=($homeDNS->"tsig") address=$ip dns-server=($homeDNS->"server") ttl=$ttl
+    :do {
+      :log info "$act $ip $hostname"
+      /system ssh-exec address=$server user=root command="$act $ip $hostname"
+    } on-error={
+      :log warning "DNS Update failed: сервер $server недоступен для $hostname ($ip)"
+    }
   }
 }
 
 :global reconnectIF do={
 ###############################
-#   Rreconnect the interface if the ip is gray and it is active
+#   Reconnect the interface if the ip is gray and it is active
 #   Input:
 #      ifaces: - a list of interfaces to check that the address is not grayed out and enabled
 #      isDebug: ---- enable logging or disabled
