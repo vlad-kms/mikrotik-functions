@@ -657,9 +657,9 @@
       :log info "  - hostname: $hostname"
       :log info "  - ip: $(ip)"
       :log info "  - isDebug: $isDebug"
-      :log info "  - server: $server"
-      :log info "  - zone: $zone"
-      :log info "  - ttl: $ttl"
+      :log info "  - server: $server (default [:tostr ($homeDNS->"server")])"
+      :log info "  - zone: $zone (default [:tostr ($homeDNS->"zone")])"
+      :log info "  - ttl: $ttl (default [:tostr ($homeDNS->"ttl")])"
     }
     :do {
       :log info "$act $ip $hostname"
