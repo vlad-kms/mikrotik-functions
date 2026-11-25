@@ -628,8 +628,8 @@
   :global homeDNS;
 
   # Calculate `isDeb` based on the `isDebug` parameter and the global variable `isLogFunc`.
-  :local isDeb [$my2bool value=$isDebug];
-  :set $isDeb ([:tobool $isDeb] || [:tobool $islogFunc])
+  #:local isDeb [$my2bool value=$isDebug];
+  :local $isDeb ([$my2bool value=$isDebug] || [:tobool $islogFunc])
 
   # Calculate TTL:
   # if the parameter `pttl` is present, then `ttl` is equal to it;
@@ -649,17 +649,17 @@
   :local act "add"
   :if ([:typeof $action] != "nothing" && [:len $action] > 0) do={ :set act $action }
 
-  :if ($hostname!="" && $ip!="") do={
-    # if hostname and ip is not empty
+  :if ($hostname!="" && $ip!="" && $server!="") do={
+    # if hostname and ip and server is not empty
     :if ($isDeb) do={
       :log info "Input parameters:"
       :log info "  - action: $act"
       :log info "  - hostname: $hostname"
-      :log info "  - ip: $(ip)"
+      :log info "  - ip: $ip"
       :log info "  - isDebug: $isDebug"
-      :log info "  - server: $server (default [:tostr ($homeDNS->"server")])"
-      :log info "  - zone: $zone (default [:tostr ($homeDNS->"zone")])"
-      :log info "  - ttl: $ttl (default [:tostr ($homeDNS->"ttl")])"
+      :log info ("  - server: $server" . " (default " . ($homeDNS->"server") . ")")
+      :log info ("  - zone: $zone" . " (default " . [:tostr ($homeDNS->"zone")] . ")")
+      :log info ("  - ttl: $ttl" . " (default " . [:tostr ($homeDNS->"ttl")] .")")
     }
     :do {
       :log info "$act $ip $hostname"
