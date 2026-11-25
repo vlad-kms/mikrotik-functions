@@ -620,6 +620,8 @@
 #      pttl: ------ ttl, default = homeDNS->ttl
 #      pzone: ----- zone, default = homeDNS->zone
 #      pserver: --- server DNS, default = homeDNS->server
+#      pkeyfile: -- file with key on server DNS, default = homeDNS->keyfile
+#      pkeyname: -- name key in file with key on server DNS, default = homeDNS->keyName
 #      isDebug: --- enable log or not
 #   Output: none
 ##################################
@@ -629,8 +631,8 @@
 
   # Calculate `isDeb` based on the `isDebug` parameter and the global variable `isLogFunc`.
   #:local isDeb [$my2bool value=$isDebug];
-  :local $isDeb ([$my2bool value=$isDebug] || [:tobool $islogFunc])
-
+  #:set $isDeb ([:tobool $isDeb] || [:tobool $islogFunc])
+  :set $isDeb ([$my2bool value=$isDebug] || [:tobool $islogFunc])
   # Calculate TTL:
   # if the parameter `pttl` is present, then `ttl` is equal to it;
   # otherwise, `ttl` is equal to the global variable `homeDNS->ttl`.
@@ -648,6 +650,16 @@
   # Calculate operation, add or del records of host. Default is 'add'
   :local act "add"
   :if ([:typeof $action] != "nothing" && [:len $action] > 0) do={ :set act $action }
+  # Calculate KeyFile:
+  # if the parameter `pkeyfile` is present, then `keyfile` is equal to it;
+  # otherwise, `keyfile` is equal to the global variable `homeDNS->keyfile`.
+  :local keyfile [:tostr ($homeDNS->"keyFile")]
+  :if ( [:typeof $pkeyfile]!="nothing" && [:len $pkeyfile]!=0) do={ :set keyfile $pkeyfile }
+  # Calculate KeyName:
+  # if the parameter `pkeyname` is present, then `keyname` is equal to it;
+  # otherwise, `keyname` is equal to the global variable `homeDNS->keyName`.
+  :local keyname [:tostr ($homeDNS->"keyName")]
+  :if ( [:typeof $pkeyname]!="nothing" && [:len $pkeyname]!=0) do={ :set keyname $pkeyname }
 
   :if ($hostname!="" && $ip!="" && $server!="") do={
     # if hostname and ip and server is not empty
@@ -660,10 +672,20 @@
       :log info ("  - server: $server" . " (default " . ($homeDNS->"server") . ")")
       :log info ("  - zone: $zone" . " (default " . [:tostr ($homeDNS->"zone")] . ")")
       :log info ("  - ttl: $ttl" . " (default " . [:tostr ($homeDNS->"ttl")] .")")
+      :log info ("  - keyfile: $keyfile" . " (default " . [:tostr ($homeDNS->"keyFile")] .")")
+      :log info ("  - keyname: $keyname" . " (default " . [:tostr ($homeDNS->"keyName")] .")")
     }
     :do {
-      :log info "$act $ip $hostname"
-      /system ssh-exec address=$server user=root command="$act $ip $hostname"
+      # Call with positional parameters
+      #:if ($isDeb) do={
+      #  :log info "nsupdate-recvord $act $ip $hostname"
+      #}
+      #/system ssh-exec address=$server user=root command="$act $ip $hostname"
+      # Call with named parameters
+      :if ($isDeb) do={
+        :log info "nsupdate-recvord -o $act -4 $ip -k $keyfile --key-name $keyname --ttl $ttl -h '$hostname'"
+      }
+      /system ssh-exec address=$server user=root command="-o $act -4 $ip -k $keyfile --key-name $keyname --ttl $ttl -h '$hostname'"
     } on-error={
       :log warning "DNS Update failed: сервер $server недоступен для $hostname ($ip)"
     }
