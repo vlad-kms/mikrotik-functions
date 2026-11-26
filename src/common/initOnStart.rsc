@@ -76,7 +76,7 @@
   :if ([:typeof $pCC]="str" && $pCC!="") do={ :set $cc $pCC }
   :if ([:typeof $pTO]="str" && $pTO!="") do={ :set $to $pTO }
   :if ([:typeof $pPORT]="num" && $pPORT>0) do={ :set $portL $pPORT }
-  :if ([:typeof $pTLS]="str" && $pPORT!="") do={ :set $lTLS $pTLS }
+  :if ([:typeof $pTLS]="str" && $pTLS!="") do={ :set $lTLS $pTLS }
 
   :if ($to="") do={ :set $to $cc }
   :if ($to="") do={ :set $to $Eaccount }
@@ -102,7 +102,7 @@
     :log info "to: $to"
     :log info "portL: $portL"
     :log info "lTLS: $lTLS"
-    :local typetls [:typeof lTLS]
+    :local typetls [:typeof $lTLS]
     :log info "typeof lTLS: $typetls"
   }
   # check the required parameters and exit without sending an email if they are inaccurate.
@@ -124,7 +124,7 @@
     }
     if ([$upper value=$lTLS]="STARTTLS") do={
       :set isTLS [:tobool true]
-      :local res [/tool e-mail send from=$acct to=$to server=[:resolve "$serv"]  tls=starttls user=$acct password=$passwd subject=$subj body=$body cc=$cc as-value]
+      :local res [/tool e-mail send from=$acct to=$to server=[:resolve "$serv"]  tls=starttls port=$portL user=$acct password=$passwd subject=$subj body=$body cc=$cc as-value]
     }
     if ( ! $isTLS ) do={
       :log error "Invalid parameters: tls: $lTLS. Letter not sent"
@@ -163,10 +163,10 @@
       }
     } else={
       :set $res [:tobool $value]
-      :if ([:typeof $res]=nil) do={ :set $res (false) }
+      :if ([:typeof $res]="nil") do={ :set $res (false) }
     }
   }
-  return $res
+  :return $res
 }
 
 :global upper do={
@@ -194,13 +194,13 @@
     :local match
     :if ($direction!=0) do={
       # UPPER
-      :for i from=0 to=[:len $lower] do={
+      :for i from=0 to=([:len $lower] - 1) do={
         :set $match ($lower->$i)
         :if ($char = $match) do={:set $char ($upper->$i)}
       }
     } else={
       # LOWER
-      :for i from=0 to=[:len $upper] do={
+      :for i from=0 to=([:len $upper] -1) do={
         :set $match ($upper->$i)
         :if ($char = $match) do={:set $char ($lower->$i)}
       }
@@ -224,6 +224,7 @@
 ##############################
   :local isBogon false;
   :local isDeb (false)
+  :if ([:typeof $ipfull] = "nothing" || [:len $ipfull] = 0) do={ :return true }
   :set isBogon [:tobool ( ($ipfull in 192.168.0.0/16) or ( $ipfull in 10.0.0.0/8) or ( $ipfull in 172.16.0.0/12) )]
   :set isBogon [:tobool ( $isBogon or ($ipfull in 0.0.0.0/8) or ( $ipfull in 100.64.0.0/10) or ( $ipfull in 127.0.0.0/8) )]
   :set isBogon [:tobool ( $isBogon or ($ipfull in 169.254.0.0/16) or ( $ipfull in 192.0.0.0/24) or ( $ipfull in 192.0.2.0/24) )]
@@ -255,95 +256,114 @@
 ##############################
 #   Get status interface (disabled or enabled, ipv4, ipv4 full, isBogon, active or not)
 #      Input:
-#         ifname - name interface (pppoe-rtc, ethernet5 etc)
-#         ifData   - data for interface
+#         ifname - name interface (i-net, eth9-redcom, etc)
+#         ifData - data for interface
 ##############################
 
-  :global islogFunc;
-  :global isBogon;
-  :global my2bool;
+  :global islogFunc
+  :global isBogon
+  :global my2bool
 
   :local isData [:tobool false]
-  :local useAPI [:tobool false];
+  :local useAPI [:tobool false]
 
-  :if ( $islogFunc ) do={
-    :log info ("function $0 (".$ifname.") START ===========================");
+  :if ($islogFunc) do={
+    :log info ("function $0 (" . $ifname . ") START ===========================")
   }
 
-  :if ([:typeof $ifData]="nothing") do={
-    :set isData [:tobool false]
-  } else={
+  :if ([:typeof $ifData]!="nothing") do={
     :set isData [:tobool true]
-  }
-  :if ( $islogFunc ) do={
-    :log info ("isData: ".$isData);
+    :if ($islogFunc) do={
+      :log info "ifData:"
+      :log info $ifData
+    }
+    :if ([:typeof ($ifData->"isExternalDevice")]!="nothing") do={
+      :set useAPI [$my2bool value=($ifData->"isExternalDevice")]
+    }
   }
 
-  :if ( $isData ) do={
-    :if ( $islogFunc) do={
-      :log info ("ifData");
-      :log info ($ifData);
-    }
-    :if ([:typeof ($ifData->"isExternalDevice")]="nothing") do={
-      :set useAPI [tobool false];
-    } else={
-      :set useAPI [$my2bool value=($ifData->"isExternalDevice")];
-    }
-  }
-  :if ( $islogFunc ) do={
-    :log info ("useAPI: ".$useAPI);
+  :if ($islogFunc) do={
+    :log info ("isData: " . $isData . "; useAPI: " . $useAPI)
   }
 
   :local result [:toarray ""]
-  :local r [/interface get $ifname ]
+  :local ifIds [/interface find name=$ifname]
+
+  # Защита 1: если интерфейс не найден в системе
+  :if ([:len $ifIds] = 0) do={
+    :if ($islogFunc) do={
+      :log warning ("function $0: interface '" . $ifname . "' not found!")
+    }
+    :set ($result->"disabled") true
+    :set ($result->"running") false
+    :set ($result->"ipm") ""
+    :set ($result->"ip") ""
+    :set ($result->"isBogon") true
+    :return $result
+  }
+
+  :local r [/interface get [:pick $ifIds 0]]
   :set ($result->"disabled") ($r->"disabled")
   :set ($result->"running") ($r->"running")
   :local ipad ""
+
   :if ($result->"running") do={
     :if ($useAPI) do={
       ### disable all address list "list_getip_"
-      :foreach li in=[/ip firewall address-list find list~"list_getip_"] do={/ip firewall address-list disable $li;}
+      :foreach li in=[/ip firewall address-list find list~"list_getip_"] do={ /ip firewall address-list disable $li }
       ### enable address list "list_getip_".$ifname
-      :foreach li in=[/ip firewall address-list find list="list_getip_".$ifname] do={/ip firewall address-list enable $li;}
-      ### run http query to https://ipv4-internet.yandex.net/api/v0/ip
-      :delay 3;
-      :local res [/tool fetch url="https://ipv4-internet.yandex.net/api/v0/ip" mode=https http-method=get as-value output=user];
-
-      :local lip ($res->"data");
-      :local fch [:pick $lip 0 1]
-      :if ($fch="\"") do={
-        :set ($res->"data") [:toip [:pick $lip 1 ([:len $lip]-1)]]
+      :foreach li in=[/ip firewall address-list find list=("list_getip_" . $ifname)] do={ /ip firewall address-list enable $li }
+      :delay 3
+      # Защита 2: перехват ошибок сети при запросе внешнего API
+      :do {
+        :local res [/tool fetch url="https://ipv4-internet.yandex.net/api/v0/ip" mode=https http-method=get as-value output=user];
+        #:local res [/tool fetch url="https://yandex.net" mode=https http-method=get as-value output=user]
+        :local lip ($res->"data")
+        :if ([:pick $lip 0 1] = "\"") do={
+          :set lip [:pick $lip 1 ([:len $lip] - 1)]
+        }
+        :local parsedIp [:toip $lip]
+        :if ([:typeof $parsedIp] = "ip") do={
+          :set ipad ([:tostr $parsedIp] . "/32")
+        }
+        :if ($islogFunc) do={
+          :log info "res API:"
+          :log info $res
+        }
+      } on-error={
+        :if ($islogFunc) do={
+          :log warning ("function $0: failed to fetch external IP for " . $ifname)
+        }
       }
-
-      :if ( $islogFunc ) do={
-        :log info "res!!!:"
-        :log info ($res)
-      }
-      :set ipad ($res->"data"."/32")
     } else={
-      :set ipad [/ip address get [/ip address find interface=$ifname] address]
+      # Защита 3: безопасное чтение первого активного IP-адреса
+      :local ipIds [/ip address find interface=$ifname disabled=no]
+      :if ([:len $ipIds] > 0) do={
+        :set ipad [/ip address get [:pick $ipIds 0] address]
+      }
     }
   }
+
   :set ($result->"ipm") $ipad
   :set ($result->"isBogon") [$isBogon ipfull=$ipad]
-  ### From the IP address received on the interface by excluding the mask ###
-  :for i from=( [:len $ipad] - 1) to=0 do={
-    :if ( [:pick $ipad $i] = "/") do={
-      :set ipad [:pick $ipad 0 $i];
-      #:break;
-    }
+
+  # Отрезаем маску подсети, если она есть
+  :local slashPos [:find $ipad "/"]
+  :if ([:typeof $slashPos] = "num") do={
+    :set ipad [:pick $ipad 0 $slashPos]
   }
   :set ($result->"ip") $ipad
 
-  :if ( $islogFunc ) do={
-    :log info ("Status: ");
-    :log info ($result);
-    :log info ("function $0 (".$ifname.") END ===========================");
+  :if ($islogFunc) do={
+    :log info "Status:"
+    :log info $result
+    :log info ("function $0 (" . $ifname . ") END ===========================")
   }
 
-  :return ($result)
+  :return $result
 }
 
+#DEPRECATED. Можно не разбирать эту функцию
 :global oneInterface2DDNS do={
 ##############################
 #   Update a DNS record for one interface
@@ -828,7 +848,7 @@
   :return [:tostr $ret]
 }
 
-global versionFirmware do={
+:global versionFirmware do={
 ###############################
 #   Get version for upgrade firmware
 #   Input:
