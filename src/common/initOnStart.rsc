@@ -10,6 +10,7 @@
 ### :global reconnectIF
 ### :global pluginUpdDNSselectel
 ### :global nameDomainFromFullname
+### :global logFunc
 ######################################
 
 ### initialize global variable ###
@@ -153,7 +154,7 @@
 ##############################
   :global upper
   :local res [:tobool (false)]
-  :if ([:typeof $value]!="nothing") do={
+  :if ([:typeof $value]!="nothing" && $value!="nil") do={
     :if ([:typeof $value]="str") do={
       :if ([:len $value]=0) do={
         :set $res (false)
@@ -652,7 +653,7 @@
   # Calculate `isDeb` based on the `isDebug` parameter and the global variable `isLogFunc`.
   #:local isDeb [$my2bool value=$isDebug];
   #:set $isDeb ([:tobool $isDeb] || [:tobool $islogFunc])
-  :set $isDeb ([$my2bool value=$isDebug] || [:tobool $islogFunc])
+  :set $isDeb ([$my2bool value=$isDebug] || [:tobool value=$islogFunc])
   # Calculate TTL:
   # if the parameter `pttl` is present, then `ttl` is equal to it;
   # otherwise, `ttl` is equal to the global variable `homeDNS->ttl`.
@@ -895,5 +896,85 @@
     :log info "function: $0 END ============================================================="
   }
   :return $ret
+}
+
+:global logFunc  do={
+###############################
+#   Logging
+#   Input:
+#      isDebug: ---- enable or disable logging, default == islogFunc
+#      text: ------- text for logging, default ""
+#      topic: ------ topic for :log, default info
+#      prefix: ----- prefix for text
+#   Output:
+#      none
+###############################
+  :global islogFunc
+  :global my2bool
+
+  # 1. Определяем, включено ли логирование
+  :local logging ([$my2bool value=$isDebug] || [$my2bool value=$islogFunc])
+
+  # Если логирование включено
+  :if ($logging) do={
+    # 2. Локальная рекурсивная функция для сериализации массивов любой вложенности
+    :local arr2str do={
+      :local out "["
+      :local first true
+      :foreach k,v in=$arr do={
+        :if (!$first) do={ :set out ($out . "; ") }
+        :set first false
+
+        :if ([:typeof $v] = "array") do={
+          # Рекурсивный вызов для вложенного массива
+          :local sub [$self arr=$v self=$self]
+          :set out ($out . "$k=" . $sub)
+        } else={
+          :set out ($out . "$k=" . [:tostr $v])
+        }
+      }
+      :return ($out . "]")
+    }
+
+    # 3. Формируем основное тело сообщения
+    :local body ""
+    :if ([:typeof $text] = "array") do={
+      :set body [$arr2str arr=$text self=$arr2str]
+    } else={
+      :set body [:tostr $text]
+    }
+
+    # 4. Добавляем prefix, если он передан
+    :local pfx ""
+    :if (([:typeof $prefix] != "nothing") && ([:typeof $prefix] != "nil")) do={
+      :set pfx [:tostr $prefix]
+    }
+
+    :local fullMsg ($pfx . $body)
+
+    # 5. Вывод в системный лог
+    :if ($fullMsg != "") do={
+      :if ($topic = "error") do={
+        :log error $fullMsg
+      } else={
+        :if ($topic = "warning") do={
+          :log warning $fullMsg
+        } else={
+          :log info $fullMsg
+        }
+      }
+    }
+  }
+  #:if ($logging && ([:typeof $text] = "str") && ($text != "")) do={
+  #  :if ($topic = "error") do={
+  #    :log error $text
+  #  } else={
+  #    :if ($topic = "warning") do={
+  #      :log warning $text
+  #    } else={
+  #      :log info $text
+  #    }
+  #  }
+  #}
 }
 ######################################################################
