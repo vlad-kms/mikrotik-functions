@@ -651,8 +651,6 @@
   :global homeDNS;
 
   # Calculate `isDeb` based on the `isDebug` parameter and the global variable `isLogFunc`.
-  #:local isDeb [$my2bool value=$isDebug];
-  #:set $isDeb ([:tobool $isDeb] || [:tobool $islogFunc])
   :set $isDeb ([$my2bool value=$isDebug] || [:tobool value=$islogFunc])
   # Calculate TTL:
   # if the parameter `pttl` is present, then `ttl` is equal to it;
@@ -707,10 +705,13 @@
         :log info "nsupdate-recvord -o $act -4 $ip -k $keyfile --key-name $keyname --ttl $ttl -h '$hostname'"
       }
       /system ssh-exec address=$server user=root command="-o $act -4 $ip -k $keyfile --key-name $keyname --ttl $ttl -h '$hostname'"
+      :return true
     } on-error={
       :log warning "DNS Update failed: сервер $server недоступен для $hostname ($ip)"
+      :return false
     }
   }
+  :return false
 }
 
 :global reconnectIF do={
