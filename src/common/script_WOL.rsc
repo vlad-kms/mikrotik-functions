@@ -1,39 +1,9 @@
-
-:global islog;
-
 ### Variables for wol data computers
-:global wolComps [:toarray ""]
-:local l [:len $wolComps]
-:set ($wolComps->$l) [:toarray ""]
-:set ($wolComps->$l->"mac")  "00:E0:4C:68:03:DC"
-:set ($wolComps->$l->"ip")  "192.168.15.202"
-:set ($wolComps->$l->"iface")  "vlan15"
-:set ($wolComps->$l->"name")  "root.home.lan"
-
-:set l [:len $wolComps]
-:set ($wolComps->$l) [:toarray ""]
-:set ($wolComps->$l->"mac")  "D4:0D:AB:14:13:AB"
-#:set ($wolComps->$l->"ip")  "192.168.16.201"
-:set ($wolComps->$l->"iface")  "vlan16"
-:set ($wolComps->$l->"name")  "pmx.home.lan"
-
-:set l [:len $wolComps]
-:set ($wolComps->$l) [:toarray ""]
-:set ($wolComps->$l->"mac")  "00:E0:4C:68:06:E2"
-:set ($wolComps->$l->"ip")  "192.168.15.90"
-:set ($wolComps->$l->"iface")  "vlan15"
-:set ($wolComps->$l->"name")  "tn.home.lan"
-
-:local l [:len $wolComps]
-:set ($wolComps->$l) [:toarray ""]
-:set ($wolComps->$l->"mac")  "00:E0:4C:68:03:D0"
-:set ($wolComps->$l->"ip")  "192.168.15.202"
-:set ($wolComps->$l->"iface")  "vlan15"
-:set ($wolComps->$l->"name")  "root.home.lan"
-
-:if ($islog) do={
-  :log info "INIT script_WOL"
-  :log info $wolComps
+:global wolComps {
+  0={"mac"="00:E0:4C:68:03:DC"; "ip"="192.168.15.202"; "iface"="vlan15"; "name"="root.home.lan"};
+  1={"mac"="D4:0D:AB:14:13:AB"; "ip"="192.3168.16.201"; "iface"="vlan16"; "name"="pmx.home.lan"};
+  2={"mac"="00:E0:4C:68:06:E2"; "ip"="192.168.15.90"; "iface"="vlan15"; "name"="tn.home.lan"}
+  3={"mac"="00:E0:4C:68:03:D0"; "ip"="192.168.15.202"; "iface"="vlan15"; "name"="root.home.lan"};
 }
 
 ###########################################################################################################
@@ -298,7 +268,7 @@
   :foreach k,t in=$targets do={
     :if (([:len ($t->"mac")] > 0) && ([:len ($t->"iface")] > 0)) do={
       $logFunc isDebug=$isDeb text=("$0: sending WOL to " . ($t->"name") . " (" . ($t->"mac") . ") via " . ($t->"iface"))
-      #/tool wol mac=($t->"mac") interface=($t->"iface")
+      /tool wol mac=($t->"mac") interface=($t->"iface")
       :set sentCount ($sentCount + 1)
     } else={
       $logFunc isDebug=true prefix=("!! $0: incomplete target (missing MAC or iface): ") text=$t topic="warning"
